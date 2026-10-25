@@ -1,6 +1,7 @@
 """Thin LLM adapter. Providers: any OpenAI-compatible API (default) or Anthropic."""
 import json
 import re
+import time
 from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
@@ -15,6 +16,9 @@ EXAMPLE = (
     '"confidence":0.9}]}'
 )
 
+RETRY_CODES = {429, 500, 502, 503, 504}
+WAITS = [5, 15, 30]  # seconds between retries when the provider is overloaded
+
 
 def strip_fences(raw: str) -> str:
     raw = raw.strip()
@@ -23,23 +27,45 @@ def strip_fences(raw: str) -> str:
     return raw.strip()
 
 
+def _chat_with_retry(client, models: list[str], sys_prompt: str, prompt: str) -> str:
+    last = None
+    for model in models:
+        for attempt in range(len(WAITS) + 1):
+            try:
+                resp = client.chat.completions.create(
+                    model=model,
+                    temperature=0,
+                    response_format={"type": "json_object"},
+                    messages=[{"role": "system", "content": sys_prompt},
+                              {"role": "user", "content": prompt}],
+                )
+                return resp.choices[0].message.content or ""
+            except Exception as exc:
+                if getattr(exc, "status_code", None) not in RETRY_CODES:
+                    raise
+                last = exc
+                print(f"[llm] {model} overloaded ({exc.status_code}), attempt {attempt + 1}")
+                if attempt < len(WAITS):
+                    time.sleep(WAITS[attempt])
+    raise last
+
+
 def _openai_compat(model_cls: type[T], system: str, user: str) -> T:
     from openai import OpenAI
 
-    client = OpenAI(api_key=settings.llm_api_key or "none", base_url=settings.llm_base_url)
+    client = OpenAI(api_key=settings.llm_api_key or "none",
+                    base_url=settings.llm_base_url, max_retries=0, timeout=60)
     sys_prompt = (
         f"{system}\n\nReturn ONLY one JSON object (no prose, no markdown) matching this JSON Schema:\n"
         f"{json.dumps(model_cls.model_json_schema())}\n\nExample of valid output:\n{EXAMPLE}"
     )
+    models = [settings.llm_model]
+    if settings.llm_fallback_model:
+        models.append(settings.llm_fallback_model)
+
     prompt, last_err = user, None
     for _ in range(2):  # one retry with the validation error fed back
-        resp = client.chat.completions.create(
-            model=settings.llm_model,
-            temperature=0,
-            response_format={"type": "json_object"},
-            messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": prompt}],
-        )
-        raw = resp.choices[0].message.content or ""
+        raw = _chat_with_retry(client, models, sys_prompt, prompt)
         try:
             return model_cls.model_validate_json(strip_fences(raw))
         except ValidationError as e:

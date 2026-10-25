@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
 
-from . import graph_store, pipeline
+from . import extract, graph_store, pipeline
+from .schemas import Article
 
 
 @asynccontextmanager
@@ -15,14 +17,32 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="NexusGraph AI", version="0.1.0", lifespan=lifespan)
 
 
+class DebugIn(BaseModel):
+    text: str
+    store: bool = False
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 
+@app.post("/debug/extract")
+def debug_extract(body: DebugIn):
+    """Test the LLM on any text, without RSS. store=true also writes the result to Neo4j."""
+    art = Article(url="debug://manual", title="manual test", text=body.text)
+    try:
+        result = extract.extract(art)
+        if body.store:
+            graph_store.upsert_extraction(art.url, result)
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"{type(exc).__name__}: {exc}")
+
+
 @app.post("/ingest")
-def ingest_news(limit: int = Query(10, ge=1, le=50)):
-    return pipeline.run(limit)
+def ingest_news(limit: int = Query(10, ge=1, le=50), force: bool = False):
+    return pipeline.run(limit, force)
 
 
 @app.get("/graph")
