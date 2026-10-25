@@ -21,3 +21,9 @@ def test_clean_drops_self_loops_low_confidence_and_duplicates():
     out = clean(res, min_confidence=0.6)
     assert len(out.relations) == 1
     assert out.relations[0].source == "ASML"
+
+
+def test_strip_fences_and_parse():
+    from app.llm import strip_fences
+    raw = '```json\n{"relations": []}\n```'
+    assert Extraction.model_validate_json(strip_fences(raw)).relations == []
