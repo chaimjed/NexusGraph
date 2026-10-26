@@ -41,20 +41,22 @@ def _chat_with_retry(client, models: list[str], sys_prompt: str, prompt: str) ->
                 )
                 return resp.choices[0].message.content or ""
             except Exception as exc:
-                if getattr(exc, "status_code", None) not in RETRY_CODES:
+                code = getattr(exc, "status_code", None)
+                transient = code in RETRY_CODES or type(exc).__name__ in (
+                    "APITimeoutError", "APIConnectionError")
+                if not transient:
                     raise
                 last = exc
-                print(f"[llm] {model} overloaded ({exc.status_code}), attempt {attempt + 1}")
+                print(f"[llm] {model} transient error ({code or type(exc).__name__}), attempt {attempt + 1}")
                 if attempt < len(WAITS):
                     time.sleep(WAITS[attempt])
     raise last
-
 
 def _openai_compat(model_cls: type[T], system: str, user: str) -> T:
     from openai import OpenAI
 
     client = OpenAI(api_key=settings.llm_api_key or "none",
-                    base_url=settings.llm_base_url, max_retries=0, timeout=60)
+                    base_url=settings.llm_base_url, max_retries=0, timeout=120)
     sys_prompt = (
         f"{system}\n\nReturn ONLY one JSON object (no prose, no markdown) matching this JSON Schema:\n"
         f"{json.dumps(model_cls.model_json_schema())}\n\nExample of valid output:\n{EXAMPLE}"

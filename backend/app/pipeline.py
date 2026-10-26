@@ -1,4 +1,17 @@
-from . import extract, graph_store, ingest
+from . import extract, graph_store, ingest, resolve
+from .schemas import Article
+
+
+def process(article: Article, store: bool = True):
+    """extract -> resolve names against the graph -> (optionally) store."""
+    known = graph_store.known_entities()
+    raw = extract.extract(article, known)
+    result, alias_updates = resolve.resolve(raw, known)
+    n = 0
+    if store:
+        n = graph_store.upsert_extraction(article.url, result)
+        graph_store.add_aliases(alias_updates)
+    return result, n
 
 
 def run(limit: int = 10, force: bool = False) -> dict:
@@ -22,8 +35,7 @@ def run(limit: int = 10, force: bool = False) -> dict:
                 stats["skipped_irrelevant"] += 1
                 item["status"] = "skipped: no keyword match"
                 continue
-            result = extract.extract(article)
-            n = graph_store.upsert_extraction(article.url, result)
+            _, n = process(article)
             graph_store.mark_article(article)
             stats["relations"] += n
             stats["processed"] += 1

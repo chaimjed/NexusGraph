@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
-from . import extract, graph_store, pipeline
+from . import graph_store, pipeline
 from .schemas import Article
 
 
@@ -29,12 +29,10 @@ def health():
 
 @app.post("/debug/extract")
 def debug_extract(body: DebugIn):
-    """Test the LLM on any text, without RSS. store=true also writes the result to Neo4j."""
+    """Test the full extract + resolve path on any text. store=true writes to Neo4j."""
     art = Article(url="debug://manual", title="manual test", text=body.text)
     try:
-        result = extract.extract(art)
-        if body.store:
-            graph_store.upsert_extraction(art.url, result)
+        result, _ = pipeline.process(art, store=body.store)
         return result
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"{type(exc).__name__}: {exc}")

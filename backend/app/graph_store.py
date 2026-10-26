@@ -101,3 +101,19 @@ def critical_suppliers(min_customers: int = 2) -> list[dict]:
         """,
         n=min_customers,
     )
+def known_entities(limit: int = 300) -> list[dict]:
+    return run(
+        "MATCH (e:Entity) RETURN e.name AS name, e.type AS type, "
+        "coalesce(e.aliases, []) AS aliases ORDER BY e.name LIMIT $limit",
+        limit=limit,
+    )
+
+
+def add_aliases(updates: list[tuple]):
+    for etype, name, alias in updates:
+        run(
+            """MATCH (e:Entity {key:$key})
+               SET e.aliases = coalesce(e.aliases, []) +
+                   [a IN [$alias] WHERE NOT a IN coalesce(e.aliases, [])]""",
+            key=entity_key(name, etype), alias=alias,
+        )
