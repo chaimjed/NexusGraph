@@ -27,3 +27,21 @@ def test_strip_fences_and_parse():
     from app.llm import strip_fences
     raw = '```json\n{"relations": []}\n```'
     assert Extraction.model_validate_json(strip_fences(raw)).relations == []
+def test_clean_drops_invalid_type_combinations():
+    from app.schemas import EntityType as E, RelationType as R
+    bad = rel("Nvidia", "China", tt=E.LOCATION)                       # SUPPLIES -> Location
+    ok = rel("Nvidia", "Apple")
+    ev = rel("Export ban 2025", "Nvidia", st=E.EVENT, relation=R.AFFECTS)
+    out = clean(Extraction(relations=[bad, ok, ev]), min_confidence=0.6)
+    assert [(r.source, r.target) for r in out.relations] == [("Nvidia", "Apple"), ("Export ban 2025", "Nvidia")]
+
+def test_clean_drops_approval_as_supply_but_keeps_real_supply():
+    from app.schemas import EntityType as E, RelationType as R
+    approval = Relation(source="Nvidia", source_type=E.COMPANY, relation=R.SUPPLIES, target="Tencent",
+                        target_type=E.COMPANY, confidence=0.9,
+                        evidence="the Commerce Department approving around 10 Chinese firms to purchase the chips")
+    real = Relation(source="ASML", source_type=E.COMPANY, relation=R.SUPPLIES, target="TSMC",
+                    target_type=E.COMPANY, confidence=0.9,
+                    evidence="ASML supplies machines to TSMC under a licence")
+    out = clean(Extraction(relations=[approval, real]), min_confidence=0.6)
+    assert [x.source for x in out.relations] == ["ASML"]

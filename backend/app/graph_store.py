@@ -46,8 +46,8 @@ def upsert_extraction(url: str, result: Extraction) -> int:
         # r.relation is a validated enum, so interpolating it into Cypher is safe
         run(
             f"""
-            MERGE (s:Entity {{key:$skey}}) ON CREATE SET s.name=$sname, s.type=$stype
-            MERGE (t:Entity {{key:$tkey}}) ON CREATE SET t.name=$tname, t.type=$ttype
+            MERGE (s:Entity {{key:$skey}}) ON CREATE SET s.name=$sname, s.type=$stype, s.aliases=[]
+            MERGE (t:Entity {{key:$tkey}}) ON CREATE SET t.name=$tname, t.type=$ttype, t.aliases=[]
             MERGE (s)-[rel:{r.relation.value}]->(t)
             ON CREATE SET rel.first_seen=datetime()
             SET rel.last_seen=datetime(),

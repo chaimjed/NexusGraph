@@ -39,7 +39,7 @@ def run(limit: int = 10, force: bool = False) -> dict:
             graph_store.mark_article(article)
             stats["relations"] += n
             stats["processed"] += 1
-            item.update(status="ok", relations=n)
+            item.update(status="ok", relations=n, chars=len(article.text))
         except Exception as exc:
             stats["errors"] += 1
             item.update(status="error", error=f"{type(exc).__name__}: {str(exc)[:300]}")
