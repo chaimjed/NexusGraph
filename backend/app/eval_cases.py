@@ -65,4 +65,7 @@ CASES = [
     {"id": "neg-hedged",
      "text": "Unconfirmed reports suggest Samsung may supply memory chips to Tesla, though neither company has commented.",
      "gold": []},
+    {"id": "real-01",
+    "text": "Micron buys specialty gases from Linde and sells memory chips to Dell.",
+    "gold": [("SUPPLIES", "Linde", "Micron"), ("SUPPLIES", "Micron", "Dell")]},
 ]

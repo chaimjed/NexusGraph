@@ -117,3 +117,21 @@ def add_aliases(updates: list[tuple]):
                    [a IN [$alias] WHERE NOT a IN coalesce(e.aliases, [])]""",
             key=entity_key(name, etype), alias=alias,
         )
+_PATH_RETURN = """
+RETURN [n IN nodes(p) | {name: n.name, type: n.type}] AS nodes,
+       [r IN relationships(p) | {type: type(r), evidence: r.evidence,
+                                 sources: r.sources, confidence: r.confidence}] AS edges
+LIMIT $limit
+"""
+
+
+def paths_from(key: str, max_hops: int = 3, limit: int = 80) -> list[dict]:
+    """Everything a disruption at this entity can reach (follows edge direction)."""
+    h = max(1, min(int(max_hops), 4))
+    return run(f"MATCH p=(s:Entity {{key:$key}})-[*1..{h}]->(t:Entity) {_PATH_RETURN}", key=key, limit=limit)
+
+
+def paths_to(key: str, max_hops: int = 3, limit: int = 80) -> list[dict]:
+    """Everything that can propagate a disruption into this entity (its upstream dependencies)."""
+    h = max(1, min(int(max_hops), 4))
+    return run(f"MATCH p=(t:Entity)-[*1..{h}]->(s:Entity {{key:$key}}) {_PATH_RETURN}", key=key, limit=limit)

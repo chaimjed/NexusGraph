@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
-from . import graph_store, pipeline
+from . import ask as ask_logic, graph_store, pipeline
 from .schemas import Article
 
 
@@ -56,3 +56,9 @@ def impact(q: str, max_hops: int = Query(4, ge=1, le=6)):
 @app.get("/risks/critical-suppliers")
 def critical(min_customers: int = Query(2, ge=1)):
     return graph_store.critical_suppliers(min_customers)
+
+
+@app.get("/ask")
+def ask(question: str, max_hops: int = Query(3, ge=1, le=4)):
+    """Answer a question from graph paths: 'What happens to Apple if TSMC is disrupted?'"""
+    return ask_logic.answer(question, max_hops)
