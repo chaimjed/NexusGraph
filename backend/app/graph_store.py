@@ -51,9 +51,10 @@ def upsert_extraction(url: str, result: Extraction) -> int:
             MERGE (s)-[rel:{r.relation.value}]->(t)
             ON CREATE SET rel.first_seen=datetime()
             SET rel.last_seen=datetime(),
-                rel.confidence=CASE WHEN rel.confidence IS NULL OR $conf > rel.confidence THEN $conf ELSE rel.confidence END,
-                rel.sources=CASE WHEN $url IN coalesce(rel.sources, []) THEN rel.sources
-                                 ELSE coalesce(rel.sources, []) + $url END,
+    rel.evidence=CASE WHEN rel.confidence IS NULL OR $conf > rel.confidence THEN $evidence ELSE rel.evidence END,
+    rel.confidence=CASE WHEN rel.confidence IS NULL OR $conf > rel.confidence THEN $conf ELSE rel.confidence END,
+    rel.sources=CASE WHEN $url IN coalesce(rel.sources, []) THEN rel.sources
+                    ELSE coalesce(rel.sources, []) + $url END
                 rel.evidence=$evidence
             """,
             skey=entity_key(r.source, r.source_type), sname=r.source, stype=r.source_type.value,
@@ -120,7 +121,7 @@ def add_aliases(updates: list[tuple]):
 _PATH_RETURN = """
 RETURN [n IN nodes(p) | {name: n.name, type: n.type}] AS nodes,
        [r IN relationships(p) | {type: type(r), evidence: r.evidence,
-                                 sources: r.sources, confidence: r.confidence}] AS edges
+                                sources: r.sources, confidence: r.confidence}] AS edges
 LIMIT $limit
 """
 

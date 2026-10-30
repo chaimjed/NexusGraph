@@ -45,3 +45,14 @@ def test_clean_drops_approval_as_supply_but_keeps_real_supply():
                     evidence="ASML supplies machines to TSMC under a licence")
     out = clean(Extraction(relations=[approval, real]), min_confidence=0.6)
     assert [x.source for x in out.relations] == ["ASML"]
+
+
+def test_clean_drops_backing_as_hosts_and_hedged_approval():
+    backing = rel("Shenzhen", "SiCarrier", relation=R.HOSTS, st=E.LOCATION)
+    backing = backing.model_copy(update={"evidence": "a maker backed by the Shenzhen municipal government"})
+    site = rel("South Korea", "Samsung", relation=R.HOSTS, st=E.LOCATION)
+    site = site.model_copy(update={"evidence": "Samsung has memory plants in South Korea"})
+    hedged = rel("Nvidia", "Tencent").model_copy(update={
+        "evidence": "approved Tencent to purchase H200 chips, but Nvidia has shipped very few"})
+    out = clean(Extraction(relations=[backing, site, hedged]), min_confidence=0.6)
+    assert [(r.source, r.target) for r in out.relations] == [("South Korea", "Samsung")]

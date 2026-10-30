@@ -59,6 +59,12 @@ def critical(min_customers: int = Query(2, ge=1)):
 
 
 @app.get("/ask")
-def ask(question: str, max_hops: int = Query(3, ge=1, le=4)):
+def ask(question: str, max_hops: int = Query(3, ge=1, le=4), explain: bool = True):
     """Answer a question from graph paths: 'What happens to Apple if TSMC is disrupted?'"""
-    return ask_logic.answer(question, max_hops)
+    result = ask_logic.answer(question, max_hops)
+    if explain and result["paths"]:
+        try:
+            return {"answer": ask_logic.explain(question, result), **result}
+        except Exception as exc:  # the paths are still useful if the LLM is busy
+            return {"answer_error": f"{type(exc).__name__}: {str(exc)[:200]}", **result}
+    return result

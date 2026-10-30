@@ -50,7 +50,11 @@ def main(delay: float = 4.0) -> None:
             errors += 1
             print(f"[ERROR] {case['id']}: {type(exc).__name__}: {str(exc)[:200]}")
             continue
-        preds = [norm_rel(r.relation.value, r.source, r.target) for r in result.relations]
+        ev, preds = {}, []
+        for r in result.relations:
+            t = norm_rel(r.relation.value, r.source, r.target)
+            preds.append(t)
+            ev[t] = r.evidence
         gold = [norm_rel(*g) for g in case["gold"]]
         opt = [norm_rel(*o) for o in case.get("optional", [])]
         tp, fp, fn = score_case(preds, gold, opt)
@@ -59,9 +63,9 @@ def main(delay: float = 4.0) -> None:
             neg_total += 1
             neg_clean += 0 if fp else 1
         status = "ok " if not fp and not fn else "!! "
-        print(f"{status}{case['id']:<18} tp={tp} fp={len(fp)} missed={len(fn)}")
+        print(f"{status}{case['id']:<24} tp={tp} fp={len(fp)} missed={len(fn)}")
         for p in fp:
-            print(f"      extra : {p}")
+            print(f"      extra : {p}\n        evidence: {ev.get(p, '')[:140]}")
         for g in fn:
             print(f"      missed: {g}")
         time.sleep(delay)

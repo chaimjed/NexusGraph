@@ -1,8 +1,17 @@
 """Question answering over the knowledge graph (step 1: graph paths, no LLM)."""
 import re
 
-from . import graph_store, resolve
+from . import graph_store, llm, resolve
 from .schemas import entity_key
+
+ANSWER_SYSTEM = """You answer supply-chain risk questions using ONLY the graph paths provided.
+Each path is a chain of entities joined by relations. "A -SUPPLIES-> B" means A supplies B, so a disruption at A can reach B. Every hop is followed by the evidence quote it came from, and each path has a weakest_confidence.
+Rules:
+- Write 2 to 5 plain sentences. Start with the direct answer to the question.
+- Mention only companies and links that appear in the paths. Never add outside knowledge, numbers, dates or severity claims.
+- Describe multi-hop chains in words (for example "through TSMC") and say how many hops they take.
+- If a chain has weakest_confidence below 0.8, say that it is less certain.
+- If there are no paths, say the graph has no information for this question and do not guess."""
 
 UPSTREAM = re.compile(
     r"\b(suppliers?|supplied by|depends? on|dependenc\w*|rel(?:y|ies) on)\b"
@@ -61,7 +70,7 @@ def answer(question: str, max_hops: int = 3, max_paths: int = 20) -> dict:
     for e in entities:
         key = entity_key(e["name"], e["type"])
         rows += (graph_store.paths_from(key, max_hops) if direction == "downstream"
-                else graph_store.paths_to(key, max_hops))
+                 else graph_store.paths_to(key, max_hops))
     if len(entities) >= 2:  # keep only paths that connect the entities you asked about
         rows = [r for r in rows if sum(n["name"].casefold() in mentioned for n in r["nodes"]) >= 2]
 
@@ -84,3 +93,14 @@ def answer(question: str, max_hops: int = 3, max_paths: int = 20) -> dict:
     else:
         summary = f"{', '.join(focus)} depends on: {', '.join(related)}."
     return {**base, "summary": summary, "related_companies": related, "paths": [p for p, _ in paths]}
+
+
+def explain(question: str, result: dict, max_paths: int = 12) -> str:
+    """Let the LLM phrase the answer, using only the retrieved graph paths."""
+    lines = []
+    for i, p in enumerate(result["paths"][:max_paths], 1):
+        evidence = " | ".join(e for e in p["evidence"] if e)
+        lines.append(f"{i}. {p['chain']} (hops={p['hops']}, weakest_confidence={p['weakest_confidence']}) "
+                     f"evidence: {evidence}")
+    user = f"Question: {question}\nDirection: {result['direction']}\nPaths:\n" + "\n".join(lines)
+    return llm.complete_text(ANSWER_SYSTEM, user)

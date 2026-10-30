@@ -18,8 +18,8 @@ Relation types (edge direction = direction a disruption propagates):
   Examples of text that does NOT contain a supply relation (invented companies):
   "Regulators cleared Alpha Corp and Beta Ltd to buy Gamma's processors, but nothing has been delivered" -> no SUPPLIES (a clearance is an Event that AFFECTS the companies).
   "Delta is regarded as a rival to Gamma" -> nothing. "Epsilon collaborates with Gamma on research" -> nothing.
-- INPUT_TO: Material/Product -> Product/Company that consumes it.
-- HOSTS: Location -> Company. Use ONLY when the text says the company has a factory, fab, plant, office, expansion or operations in that place. Ignore press-release datelines, mailing addresses and boilerplate such as "Paris, France--(Newsfile Corp.) - Company X announced".
+- INPUT_TO: Material/Product -> Product/Company that consumes it. Use ONLY when the text says the material or product is used in making, or consumed by, the target. A permission to purchase is an Event, not INPUT_TO.
+- HOSTS: Location -> Company. Use ONLY when the text says the company has a factory, fab, plant, office, expansion or operations in that place. Ignore press-release datelines, mailing addresses and boilerplate such as "Paris, France--(Newsfile Corp.) - Company X announced". Do NOT use it for government backing, funding, ownership or investors ("backed by the Shenzhen municipal government" is not a site).
 - AFFECTS: Event -> Location/Company/Material/Product.
 - Government actions (export controls, sanctions, tariffs, investigations, bans) are Events: give them a descriptive name with the year, and link them with AFFECTS to the companies, locations or products they concern.
 
@@ -32,7 +32,10 @@ DATELINE = re.compile(r"[A-Za-z.\s]+,\s*[A-Za-z.\s]+--\s*\(")
 # Guardrail: an approval/licence "to buy" is not a supply relation unless the text also describes a delivery
 APPROVAL = re.compile(r"\b(approv\w*|licen[sc]\w*|permit\w*|authori[sz]\w*|clear(?:ed|ing|ance))\b", re.I)
 DELIVERY = re.compile(r"\b(suppl\w*|ship\w*|deliver\w*|sold|sell\w*|manufactur\w*)\b", re.I)
-
+HEDGED = re.compile(r"\b(very few|few|hardly|barely|trivial|not yet|yet to|no shipments)\b", re.I)
+# Funding or ownership language is not a site, unless the text also describes a site
+BACKING = re.compile(r"\b(backed|funded|financed|owned|invested|sponsor\w*|subsidiar\w*|municipal government)\b", re.I)
+SITE = re.compile(r"\b(plants?|factor(?:y|ies)|fabs?|facilit(?:y|ies)|operations|offices?|sites?|campus|headquarter\w*|expansion|production)\b", re.I)
 # Which entity types each relation may connect: (source types, target types)
 ALLOWED = {
     R.SUPPLIES: ({E.COMPANY}, {E.COMPANY}),
@@ -71,7 +74,10 @@ def clean(result: Extraction, min_confidence: float | None = None) -> Extraction
             continue
         if r.relation == R.HOSTS and DATELINE.search(r.evidence):
             continue
-        if r.relation == R.SUPPLIES and APPROVAL.search(r.evidence) and not DELIVERY.search(r.evidence):
+        if r.relation == R.HOSTS and BACKING.search(r.evidence) and not SITE.search(r.evidence):
+            continue
+        if r.relation in (R.SUPPLIES, R.INPUT_TO) and APPROVAL.search(r.evidence) and (
+                not DELIVERY.search(r.evidence) or HEDGED.search(r.evidence)):
             continue
         key = (src.casefold(), r.source_type, r.relation, tgt.casefold(), r.target_type)
         if key in seen:

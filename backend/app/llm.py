@@ -27,18 +27,34 @@ def strip_fences(raw: str) -> str:
     return raw.strip()
 
 
-def _chat_with_retry(client, models: list[str], sys_prompt: str, prompt: str) -> str:
+def _openai_client():
+    from openai import OpenAI
+
+    return OpenAI(api_key=settings.llm_api_key or "none",
+                  base_url=settings.llm_base_url, max_retries=0, timeout=120)
+
+
+def _models() -> list[str]:
+    models = [settings.llm_model]
+    if settings.llm_fallback_model:
+        models.append(settings.llm_fallback_model)
+    return models
+
+
+def _chat_with_retry(client, models: list[str], sys_prompt: str, prompt: str, json_mode: bool = True) -> str:
     last = None
     for model in models:
         for attempt in range(len(WAITS) + 1):
             try:
-                resp = client.chat.completions.create(
+                kwargs = dict(
                     model=model,
                     temperature=0,
-                    response_format={"type": "json_object"},
                     messages=[{"role": "system", "content": sys_prompt},
                               {"role": "user", "content": prompt}],
                 )
+                if json_mode:
+                    kwargs["response_format"] = {"type": "json_object"}
+                resp = client.chat.completions.create(**kwargs)
                 return resp.choices[0].message.content or ""
             except Exception as exc:
                 code = getattr(exc, "status_code", None)
@@ -52,22 +68,16 @@ def _chat_with_retry(client, models: list[str], sys_prompt: str, prompt: str) ->
                     time.sleep(WAITS[attempt])
     raise last
 
-def _openai_compat(model_cls: type[T], system: str, user: str) -> T:
-    from openai import OpenAI
 
-    client = OpenAI(api_key=settings.llm_api_key or "none",
-                    base_url=settings.llm_base_url, max_retries=0, timeout=120)
+def _openai_compat(model_cls: type[T], system: str, user: str) -> T:
+    client = _openai_client()
     sys_prompt = (
         f"{system}\n\nReturn ONLY one JSON object (no prose, no markdown) matching this JSON Schema:\n"
         f"{json.dumps(model_cls.model_json_schema())}\n\nExample of valid output:\n{EXAMPLE}"
     )
-    models = [settings.llm_model]
-    if settings.llm_fallback_model:
-        models.append(settings.llm_fallback_model)
-
     prompt, last_err = user, None
     for _ in range(2):  # one retry with the validation error fed back
-        raw = _chat_with_retry(client, models, sys_prompt, prompt)
+        raw = _chat_with_retry(client, _models(), sys_prompt, prompt)
         try:
             return model_cls.model_validate_json(strip_fences(raw))
         except ValidationError as e:
@@ -99,3 +109,15 @@ def extract_structured(model_cls: type[T], system: str, user: str) -> T:
     if settings.llm_provider == "anthropic":
         return _anthropic(model_cls, system, user)
     return _openai_compat(model_cls, system, user)
+
+
+def complete_text(system: str, user: str) -> str:
+    """Plain-text completion (used to write answers)."""
+    if settings.llm_provider == "anthropic":
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        resp = client.messages.create(model=settings.llm_model, max_tokens=700, system=system,
+                                      messages=[{"role": "user", "content": user}])
+        return "".join(b.text for b in resp.content if b.type == "text").strip()
+    return _chat_with_retry(_openai_client(), _models(), system, user, json_mode=False).strip()

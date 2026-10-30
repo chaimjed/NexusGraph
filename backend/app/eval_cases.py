@@ -65,7 +65,68 @@ CASES = [
     {"id": "neg-hedged",
      "text": "Unconfirmed reports suggest Samsung may supply memory chips to Tesla, though neither company has commented.",
      "gold": []},
-    {"id": "real-01",
+    {
+    "id": "real-01",
     "text": "Micron buys specialty gases from Linde and sells memory chips to Dell.",
-    "gold": [("SUPPLIES", "Linde", "Micron"), ("SUPPLIES", "Micron", "Dell")]},
+    "gold": [("SUPPLIES", "Linde", "Micron"), ("SUPPLIES", "Micron", "Dell")]
+    },
+        # ---- direction and phrasing variants ----
+    {"id": "reversed-buyer-first",
+     "text": "Dell buys its memory chips from Micron.",
+     "gold": [("SUPPLIES", "Micron", "Dell")]},
+
+    {"id": "passive-voice",
+     "text": "Apple's processors are manufactured by TSMC.",
+     "gold": [("SUPPLIES", "TSMC", "Apple")]},
+
+    {"id": "two-suppliers-one-customer",
+     "text": "Lam Research and Tokyo Electron both sell etching tools to SK Hynix.",
+     "gold": [("SUPPLIES", "Lam Research", "SK Hynix"), ("SUPPLIES", "Tokyo Electron", "SK Hynix")]},
+
+    {"id": "hosts-new-fab",
+     "text": "Samsung is building a new chip fab in Texas.",
+     "gold": [("HOSTS", "Texas", "Samsung")]},
+
+{"id": "event-natural-disaster",
+     "text": "A 2026 earthquake in Taiwan halted production at TSMC for two days.",
+     "gold": [("AFFECTS", "earthquake", "TSMC")],
+     "optional": [("AFFECTS", "earthquake", "Taiwan"), ("HOSTS", "Taiwan", "TSMC")]},
+
+
+    # ---- more negatives ----
+    {"id": "neg-investor",
+     "text": "SoftBank holds a majority stake in Arm and has invested billions in AI start-ups.",
+     "gold": []},
+
+    {"id": "neg-rivals",
+     "text": "AMD competes with Intel in the server processor market.",
+     "gold": []},
+
+    {"id": "neg-partnership",
+     "text": "Intel and Microsoft announced a partnership to promote AI-enabled PCs.",
+     "gold": []},
+
+    {"id": "neg-vague",
+     "text": "Companies across the industry are diversifying their supply chains to reduce risk.",
+     "gold": []},
+
+    {"id": "neg-denied",
+     "text": "Nvidia denied that it has supplied any chips to Huawei.",
+     "gold": []},
+
+    {"id": "neg-country-customer",
+     "text": "China imported record volumes of chipmaking equipment from the Netherlands last year.",
+     "gold": []},
+         {"id": "neg-backed-by-government",
+     "text": "SiCarrier is a semiconductor equipment maker backed by the Shenzhen municipal government.",
+     "gold": []},
+
+    {"id": "real-hosts-countries",
+     "text": "Samsung and SK Hynix have memory plants in South Korea and large operations in China.",
+     "gold": [("HOSTS", "South Korea", "Samsung"), ("HOSTS", "South Korea", "SK Hynix"),
+              ("HOSTS", "China", "Samsung"), ("HOSTS", "China", "SK Hynix")]},
+
+    {"id": "real-foundry",
+     "text": "TSMC, the contract manufacturer that fabricates chips for Nvidia, said demand remains strong.",
+     "gold": [("SUPPLIES", "TSMC", "Nvidia")]},
 ]
